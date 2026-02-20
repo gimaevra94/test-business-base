@@ -1,0 +1,9 @@
+FROM golang:1.21-alpine AS build
+WORKDIR /app
+COPY . .
+RUN go build -o bin/service ./cmd/service
+
+FROM alpine:latest
+WORKDIR /app
+COPY --from=build /app/bin/service .
+CMD ["./service"]
