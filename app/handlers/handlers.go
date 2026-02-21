@@ -2,28 +2,31 @@ package handlers
 
 import (
 	"database/sql"
+	"errors"
 	"html/template"
 	"net/http"
 	"strconv"
 
 	"github.com/gimaevra94/test-business-base/consts"
 	"github.com/gimaevra94/test-business-base/database"
+	"github.com/gimaevra94/test-business-base/structs"
+	"github.com/sirupsen/logrus"
 )
 
 func getSession(r *http.Request) (int, string, string) {
-	c, err := r.Cookie("user_id")
+	c, err := r.Cookie(consts.UID)
 	if err != nil {
 		return 0, "", ""
 	}
 	uid, _ := strconv.Atoi(c.Value)
 
-	c, err = r.Cookie("role")
+	c, err = r.Cookie(consts.Role)
 	role := ""
 	if err == nil {
 		role = c.Value
 	}
 
-	c, err = r.Cookie("name")
+	c, err = r.Cookie(consts.Name)
 	name := ""
 	if err == nil {
 		name = c.Value
@@ -44,47 +47,104 @@ func Home(tmpl *template.Template) http.HandlerFunc {
 
 func Login(db *database.DB, tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		data := structs.LoginData{}
+
 		if r.Method == http.MethodPost {
-			uid, _ := strconv.Atoi(r.FormValue("user_id"))
-			role := r.FormValue("role")
-			name := r.FormValue("name")
-			http.SetCookie(w, &http.Cookie{Name: "user_id", Value: strconv.Itoa(uid)})
-			http.SetCookie(w, &http.Cookie{Name: "role", Value: role})
-			http.SetCookie(w, &http.Cookie{Name: "name", Value: name})
+			StrUID := r.FormValue(consts.UID)
+			role := r.FormValue(consts.Role)
+			name := r.FormValue(consts.Name)
+
+			if StrUID == "" || role == "" || name == "" {
+				data.Msg = consts.BadInput
+				logrus.Info(consts.BadInput)
+				return
+			}
+
+			uid, _ := strconv.Atoi(r.FormValue(consts.UID))
+
+			http.SetCookie(w, &http.Cookie{Name: consts.UID, Value: strconv.Itoa(uid)})
+			http.SetCookie(w, &http.Cookie{Name: consts.Role, Value: role})
+			http.SetCookie(w, &http.Cookie{Name: consts.Name, Value: name})
+			http.Redirect(w, r, consts.Dashboard, http.StatusSeeOther)
+			return
+
+		} else if r.Method == http.MethodGet {
+			users, err := db.GetUsers()
+			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					data.Msg = consts.EmptyDB
+					logrus.Info(consts.EmptyDB)
+				}
+				data.Msg = consts.InternalError
+				logrus.Error(err)
+			}
+
+			data.Users = users
+			tmpl.ExecuteTemplate(w, consts.Login, data)
+			return
+
+		} else {
+			data.Msg = consts.NotAllowed
+			logrus.Info(consts.NotAllowed)
+			return
+		}
+	}
+}
+
+func Logout(db *database.DB, tmpl *template.Template) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		http.SetCookie(w, &http.Cookie{Name: consts.UID, Value: "", MaxAge: -1})
+		http.Redirect(w, r, consts.Home, http.StatusSeeOther)
+	}
+}
+
+func Create(db *database.DB, tmpl *template.Template) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		data := structs.LoginData{}
+
+		if r.Method == http.MethodPost {
+			clientName := r.FormValue(consts.ClientName)
+			phone := r.FormValue(consts.Phone)
+			address := r.FormValue(consts.Address)
+			problemText := r.FormValue(consts.ProblemText)
+
+			if clientName == "" || phone == "" || address == "" || problemText == "" {
+				data.Msg = consts.BadInput
+				logrus.Info(consts.BadInput)
+				return
+			}
+
+			req := structs.Request{
+				ClientName:  clientName,
+				Phone:       phone,
+				Address:     address,
+				ProblemText: problemText,
+			}
+
+			err, insertIsOk := db.Create(&req)
+			if err != nil {
+				data.Msg = consts.InternalError
+				logrus.Error(err)
+				return
+			}
+
+			if !insertIsOk {
+				data.Msg = consts.InternalError
+				logrus.Error(consts.InternalError)
+				return
+			}
+
 			http.Redirect(w, r, consts.Dashboard, http.StatusSeeOther)
 			return
 		}
-
-		users,err:=db.GetUsers()
-		if err!=nil{
-			
-		}
-
-		tmpl.ExecuteTemplate(w, "login.html", users)
+		tmpl.ExecuteTemplate(w, "create.html", nil)
 	}
-}
-
-func logoutHandler(w http.ResponseWriter, r *http.Request) {
-	http.SetCookie(w, &http.Cookie{Name: "user_id", Value: "", MaxAge: -1})
-	http.Redirect(w, r, "/", http.StatusSeeOther)
-}
-
-func createHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodPost {
-		_, err := db.Exec("INSERT INTO requests (client_name, phone, address, problem_text, status) VALUES (?, ?, ?, ?, 'new')",
-			r.FormValue("client_name"), r.FormValue("phone"), r.FormValue("address"), r.FormValue("problem_text"))
-		if err == nil {
-			http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
-			return
-		}
-	}
-	tmpl.ExecuteTemplate(w, "create.html", nil)
 }
 
 func dashboardHandler(w http.ResponseWriter, r *http.Request) {
 	uid, role, name := getSession(r)
 	if uid == 0 {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		http.Redirect(w, r, consts.Home, http.StatusSeeOther)
 		return
 	}
 

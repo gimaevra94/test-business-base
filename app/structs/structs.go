@@ -10,3 +10,8 @@ type User struct {
 	Name string
 	Role string
 }
+
+type LoginData struct {
+	Users []User
+	Msg string
+}

@@ -2,43 +2,49 @@ package main
 
 import (
 	"embed"
+	"fmt"
 	"html/template"
-	"log"
 	"net/http"
 	"os"
 
+	"github.com/gimaevra94/test-business-base/consts"
 	"github.com/gimaevra94/test-business-base/database"
 	"github.com/gimaevra94/test-business-base/handlers"
 	"github.com/go-chi/chi/v5"
 	"github.com/joho/godotenv"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 //go:embed templates/*.html
 var templatesFS embed.FS
 
 func main() {
-	initEnv()
+	if err := initEnv(); err != nil {
+		logrus.Fatal(err)
+		return
+	}
 
 	db, err := initDB()
 	if err != nil {
-		log.Fatal(err)
+		logrus.Fatal(err)
+		return
 	}
 	defer db.DB.Close()
 
 	tmpl := template.Must(template.ParseFS(templatesFS, "templates/*.html"))
 
-	r := initRouter(db)
+	r := initRouter(db, tmpl)
 	if err := http.ListenAndServe(":8080", r); err != nil {
-		log.Fatal(err)
+		logrus.Fatal(err)
+		return
 	}
 
 }
 
-func initEnv() {
+func initEnv() error {
 	if err := godotenv.Load("../.env"); err != nil {
-		log.Fatal(err)
-		return
+		return errors.WithStack(err)
 	}
 
 	envVars := []string{
@@ -48,8 +54,9 @@ func initEnv() {
 
 	for _, v := range envVars {
 		if os.Getenv(v) == "" {
-			log.Fatal(v)
-			return
+			spErr := fmt.Sprintf("Missing %s env var", v)
+			err := errors.New(spErr)
+			return errors.WithStack(err)
 		}
 	}
 }
@@ -66,10 +73,10 @@ func initDB() (*database.DB, error) {
 
 func initRouter(db *database.DB, tmpl *template.Template) *chi.Mux {
 	r := chi.NewRouter()
-	r.Get("/", handlers.Home(tmpl))
-	r.MethodFunc("GET|POST", "/login", loginHandler(db))
-	r.Get("/logout", logoutHandler(db))
-	r.MethodFunc("GET|POST", "/create", createHandler(db))
+	r.Get(consts.Home, handlers.Home(tmpl))
+	r.MethodFunc("GET|POST", consts.Login, handlers.Login(db, tmpl))
+	r.Get(consts.Logout, handlers.Logout(db, tmpl))
+	r.MethodFunc("GET|POST", consts.Create, handlers.Create(db, tmpl))
 	r.Get("/dashboard", dashboardHandler(db))
 	r.Post("/action", actionHandler(db))
 	return r
