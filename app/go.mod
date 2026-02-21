@@ -1,6 +1,6 @@
 module github.com/gimaevra94/test-business-base
 
-go 1.25.0
+go 1.25.5
 
 require (
 	github.com/go-chi/chi/v5 v5.2.5

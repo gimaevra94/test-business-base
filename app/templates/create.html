@@ -1,0 +1,11 @@
+<!DOCTYPE html><html><head><title>Новая заявка</title><style>body{font-family:sans-serif;max-width:500px;margin:20px auto;}input,textarea,button{width:100%;padding:10px;margin:5px 0;box-sizing:border-box;}</style></head>
+<body><h2>Создание заявки</h2>
+<a href="/dashboard">Назад</a>
+<form method="POST" action="/create">
+    <input name="client_name" placeholder="Имя клиента" required>
+    <input name="phone" placeholder="Телефон" required>
+    <input name="address" placeholder="Адрес" required>
+    <textarea name="problem_text" placeholder="Описание проблемы" required></textarea>
+    <button type="submit">Создать</button>
+</form>
+</body></html>

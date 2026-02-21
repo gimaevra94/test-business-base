@@ -1,0 +1,47 @@
+<!DOCTYPE html><html><head><title>Панель</title><style>body{font-family:sans-serif;margin:20px;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ddd;padding:8px;text-align:left;}th{background:#f2f2f2;}.btn{padding:5px 10px;text-decoration:none;color:white;background:#007bff;border:none;cursor:pointer;}.btn-cancel{background:#dc3545;}.btn-success{background:#28a745;}.alert{color:red;}</style></head>
+<body>
+<h2>Панель: {{.User}} ({{.Role}})</h2>
+{{if .Error}}<p class="alert">Ошибка: заявка уже изменена (Гонка)</p>{{end}}
+<div style="margin-bottom:20px;">
+    {{if eq .Role "dispatcher"}}<a href="/create" class="btn">Новая заявка</a>{{end}}
+    <a href="/logout" class="btn btn-cancel">Выход</a>
+    <form method="GET" style="display:inline;"><select name="status"><option value="">Все статусы</option><option value="new">new</option><option value="assigned">assigned</option><option value="in_progress">in_progress</option><option value="done">done</option></select><button type="submit">Фильтр</button></form>
+</div>
+<table>
+    <tr><th>ID</th><th>Клиент</th><th>Проблема</th><th>Статус</th><th>Мастер</th><th>Действие</th></tr>
+    {{range .Requests}}
+    <tr>
+        <td>{{.ID}}</td><td>{{.ClientName}}<br>{{.Phone}}</td><td>{{.ProblemText}}</td><td>{{.Status}}</td><td>{{if .AssignedTo}}{{.AssignedTo}}{{else}}-{{end}}</td>
+        <td>
+            {{if eq $.Role "dispatcher"}}
+                {{if eq .Status "new"}}
+                <form method="POST" action="/action" style="display:inline;">
+                    <input type="hidden" name="id" value="{{.ID}}"><input type="hidden" name="action" value="assign">
+                    <select name="master_id">{{range $.Masters}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select>
+                    <button type="submit" class="btn">Назначить</button>
+                </form>
+                {{end}}
+                {{if or (eq .Status "new") (eq .Status "assigned")}}
+                <form method="POST" action="/action" style="display:inline;">
+                    <input type="hidden" name="id" value="{{.ID}}"><input type="hidden" name="action" value="cancel">
+                    <button type="submit" class="btn btn-cancel">Отмена</button>
+                </form>
+                {{end}}
+            {{else if eq $.Role "master"}}
+                {{if eq .Status "assigned"}}
+                <form method="POST" action="/action" style="display:inline;">
+                    <input type="hidden" name="id" value="{{.ID}}"><input type="hidden" name="action" value="start">
+                    <button type="submit" class="btn btn-success">В работу</button>
+                </form>
+                {{end}}
+                {{if eq .Status "in_progress"}}
+                <form method="POST" action="/action" style="display:inline;">
+                    <input type="hidden" name="id" value="{{.ID}}"><input type="hidden" name="action" value="finish">
+                    <button type="submit" class="btn">Завершить</button>
+                </form>
+                {{end}}
+            {{end}}
+        </td>
+    </tr>{{end}}
+</table>
+</body></html>

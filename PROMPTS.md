@@ -789,3 +789,23 @@ log.Println("Server started :8080")
 log.Fatal(http.ListenAndServe(":8080", r))
 ```
 ////////// КОНЕЦ
+
+21.02.26
+////////// НАЧАЛО
+### USER
+объясни фрагменты "var templatesFS embed.FS" "var tmpl *template.Template" "tmpl = template.Must(template.ParseFS(templatesFS, "templates/*.html"))"
+
+### ASSISTANT
+1. **`var templatesFS embed.FS`**
+   Виртуальная файловая система. Файлы вкладываются внутрь бинарника при компиляции.
+   *Требование*: Над строкой обязательна директива `//go:embed templates/*.html`.
+
+2. **`var tmpl *template.Template`**
+   Глобальная переменная для хранения скомпилированных шаблонов (кэширование).
+
+3. **`tmpl = template.Must(...)`**
+   Парсинг файлов из `templatesFS` при старте приложения.
+   *`Must`*: Паникует при ошибке парсинга. Это правильно для инициализации — сервер не запустится с битыми шаблонами.
+
+**Преимущество**: Не нужно копировать папку `templates` в Docker-образ, всё внутри одного файла.
+////////// КОНЕЦ

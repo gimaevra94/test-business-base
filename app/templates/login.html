@@ -1,0 +1,18 @@
+<!DOCTYPE html><html><head><title>Вход</title><style>body{font-family:sans-serif;max-width:400px;margin:50px auto;}select,button{width:100%;padding:10px;margin:5px 0;}</style></head>
+<body><h2>Выберите пользователя</h2>
+<form method="POST" action="/login">
+    <select name="user_id" id="uid" onchange="updateData()">{{range .}}<option value="{{.ID}}" data-role="{{.Role}}" data-name="{{.Name}}">{{.Name}} ({{.Role}})</option>{{end}}</select>
+    <input type="hidden" name="role" id="role">
+    <input type="hidden" name="name" id="name">
+    <button type="submit">Войти</button>
+</form>
+<script>
+function updateData(){
+    const s = document.getElementById('uid');
+    const o = s.options[s.selectedIndex];
+    document.getElementById('role').value = o.dataset.role;
+    document.getElementById('name').value = o.dataset.name;
+}
+updateData();
+</script>
+</body></html>

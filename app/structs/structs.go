@@ -1,7 +1,7 @@
 package structs
 
 type Request struct {
-	ID, AssignedTo, Version int
+	ID, AssignedTo, Version                                               int
 	ClientName, Phone, Address, ProblemText, Status, CreatedAt, UpdatedAt string
 }
 
