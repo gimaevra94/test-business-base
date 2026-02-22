@@ -1,11 +1,11 @@
-version: '3.8'
 services:
   db:
     image: mysql:8.0
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: repair_service
-    ports: ["3306:3306"]
+    ports:
+      - "3306:3306"
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 5s
@@ -14,7 +14,7 @@ services:
   migrate:
     image: migrate/migrate
     volumes:
-      - ./migrations:/migrations
+      - ../migrations:/migrations
     command: ["-path", "/migrations", "-database", "mysql://root:root@tcp(db:3306)/repair_service", "up"]
     depends_on:
       db:
@@ -23,17 +23,20 @@ services:
   seed:
     image: mysql:8.0
     volumes:
-      - ./seeds:/seeds
-    command: ["mysql", "-h", "db", "-u", "root", "-proot", "repair_service", "<", "/seeds/001_seeds.sql"]
+      - ../seeds:/seeds
+    command: sh -c "mysql -h db -u root -proot repair_service < /seeds/001_seeds.sql"
     depends_on:
       migrate:
         condition: service_completed_successfully
 
   app:
-    build: .
-    ports: ["8080:8080"]
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8080:8080"
     environment:
-      DB_DSN: "root:root@tcp(db:3306)/repair_service"
+      CONNECTION_CFG: root:root@tcp(db:3306)/repair_service
     depends_on:
       seed:
         condition: service_completed_successfully

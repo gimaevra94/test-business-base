@@ -1,24 +1,29 @@
 package handlers
 
 import (
-	"database/sql"
-	"errors"
 	"html/template"
+	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/gimaevra94/test-business-base/consts"
 	"github.com/gimaevra94/test-business-base/database"
+	"github.com/gimaevra94/test-business-base/errs"
 	"github.com/gimaevra94/test-business-base/structs"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
-func getSession(r *http.Request) (int, string, string) {
-	c, err := r.Cookie(consts.UID)
+func getSession(r *http.Request) (int, string, string, error) {
+	c, err := r.Cookie(consts.ID)
 	if err != nil {
-		return 0, "", ""
+		return 0, "", "", errors.WithStack(err)
 	}
-	uid, _ := strconv.Atoi(c.Value)
+
+	id, err := strconv.Atoi(c.Value)
+	if err != nil {
+		return 0, "", "", errors.WithStack(err)
+	}
 
 	c, err = r.Cookie(consts.Role)
 	role := ""
@@ -31,17 +36,22 @@ func getSession(r *http.Request) (int, string, string) {
 	if err == nil {
 		name = c.Value
 	}
-	return uid, role, name
+
+	return id, role, name, nil
 }
 
 func Home(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		uid, _, _ := getSession(r)
-		if uid > 0 {
-			http.Redirect(w, r, consts.Dashboard, http.StatusSeeOther)
+		id, _, _, _ := getSession(r)
+		if id > 0 {
+			http.Redirect(w, r, consts.DashboardPath, http.StatusSeeOther)
 			return
 		}
-		tmpl.ExecuteTemplate(w, consts.LoginHTML, nil)
+
+		if err := tmpl.ExecuteTemplate(w, consts.LoginHTML, nil); err != nil {
+			logrus.Error(err)
+			return
+		}
 	}
 }
 
@@ -49,43 +59,58 @@ func Login(db *database.DB, tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := structs.LoginData{}
 
-		if r.Method == http.MethodPost {
-			StrUID := r.FormValue(consts.UID)
+		switch r.Method {
+		case http.MethodPost:
+			id := r.FormValue(consts.ID)
 			role := r.FormValue(consts.Role)
 			name := r.FormValue(consts.Name)
 
-			if StrUID == "" || role == "" || name == "" {
-				data.Msg = consts.BadInput
-				logrus.Info(consts.BadInput)
+			if id == "" || role == "" || name == "" {
+				errs.RenderError(w, tmpl, consts.LoginHTML, &data, consts.BadInputMsg, errors.WithStack(errors.New(consts.BadInputMsg)))
 				return
 			}
 
-			uid, _ := strconv.Atoi(r.FormValue(consts.UID))
-
-			http.SetCookie(w, &http.Cookie{Name: consts.UID, Value: strconv.Itoa(uid)})
+			http.SetCookie(w, &http.Cookie{Name: consts.ID, Value: id})
 			http.SetCookie(w, &http.Cookie{Name: consts.Role, Value: role})
 			http.SetCookie(w, &http.Cookie{Name: consts.Name, Value: name})
-			http.Redirect(w, r, consts.Dashboard, http.StatusSeeOther)
+			http.Redirect(w, r, consts.DashboardPath, http.StatusSeeOther)
 			return
 
-		} else if r.Method == http.MethodGet {
+		case http.MethodGet:
+			log.Print("get")
 			users, err := db.GetUsers()
 			if err != nil {
-				if errors.Is(err, sql.ErrNoRows) {
-					data.Msg = consts.EmptyDB
-					logrus.Info(consts.EmptyDB)
-				}
-				data.Msg = consts.InternalError
-				logrus.Error(err)
+				errs.RenderError(w, tmpl, consts.LoginHTML, &data, consts.InternalErrorMsg, err)
+				return
 			}
-
+			log.Print(users)
 			data.Users = users
-			tmpl.ExecuteTemplate(w, consts.Login, data)
+			if err := tmpl.ExecuteTemplate(w, consts.LoginHTML, data); err != nil {
+				logrus.Error(err)
+				return
+			}
 			return
 
-		} else {
-			data.Msg = consts.NotAllowed
-			logrus.Info(consts.NotAllowed)
+		default:
+			errs.RenderError(w, tmpl, consts.DashboardHTML, &data, consts.NotAllowedMsg, errors.WithStack(errors.New(consts.NotAllowedMsg)))
+			return
+		}
+	}
+}
+
+func GetLogin(db *database.DB, tmpl *template.Template) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		data := structs.LoginData{}
+		log.Print("get")
+		users, err := db.GetUsers()
+		if err != nil {
+			errs.RenderError(w, tmpl, consts.LoginHTML, &data, consts.InternalErrorMsg, err)
+			return
+		}
+		log.Print(users)
+		data.Users = users
+		if err := tmpl.ExecuteTemplate(w, consts.LoginHTML, data); err != nil {
+			logrus.Error(err)
 			return
 		}
 	}
@@ -93,8 +118,8 @@ func Login(db *database.DB, tmpl *template.Template) http.HandlerFunc {
 
 func Logout(db *database.DB, tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		http.SetCookie(w, &http.Cookie{Name: consts.UID, Value: "", MaxAge: -1})
-		http.Redirect(w, r, consts.Home, http.StatusSeeOther)
+		http.SetCookie(w, &http.Cookie{Name: consts.ID, Value: "", MaxAge: -1, Path: "/"})
+		http.Redirect(w, r, consts.HomePath, http.StatusSeeOther)
 	}
 }
 
@@ -109,8 +134,7 @@ func Create(db *database.DB, tmpl *template.Template) http.HandlerFunc {
 			problemText := r.FormValue(consts.ProblemText)
 
 			if clientName == "" || phone == "" || address == "" || problemText == "" {
-				data.Msg = consts.BadInput
-				logrus.Info(consts.BadInput)
+				errs.RenderError(w, tmpl, consts.CreateHTML, &data, consts.BadInputMsg, errors.WithStack(errors.New(consts.BadInputMsg)))
 				return
 			}
 
@@ -123,110 +147,145 @@ func Create(db *database.DB, tmpl *template.Template) http.HandlerFunc {
 
 			err, insertIsOk := db.Create(&req)
 			if err != nil {
-				data.Msg = consts.InternalError
+				data.Msg = consts.InternalErrorMsg
 				logrus.Error(err)
+				if err := tmpl.ExecuteTemplate(w, consts.CreateHTML, data); err != nil {
+					logrus.Error(err)
+					return
+				}
+				errs.RenderError(w, tmpl, consts.CreateHTML, &data, consts.InternalErrorMsg, err)
 				return
 			}
 
 			if !insertIsOk {
-				data.Msg = consts.InternalError
-				logrus.Error(consts.InternalError)
+				errs.RenderError(w, tmpl, consts.CreateHTML, &data, consts.InternalErrorMsg, errors.WithStack(errors.New(consts.InternalErrorMsg)))
 				return
 			}
 
-			http.Redirect(w, r, consts.Dashboard, http.StatusSeeOther)
+			http.Redirect(w, r, consts.DashboardPath, http.StatusSeeOther)
 			return
 		}
-		tmpl.ExecuteTemplate(w, "create.html", nil)
+
+		if err := tmpl.ExecuteTemplate(w, consts.CreateHTML, data); err != nil {
+			logrus.Error(err)
+			return
+		}
 	}
 }
 
-func dashboardHandler(w http.ResponseWriter, r *http.Request) {
-	uid, role, name := getSession(r)
-	if uid == 0 {
-		http.Redirect(w, r, consts.Home, http.StatusSeeOther)
-		return
-	}
+func Dashboard(db *database.DB, tmpl *template.Template) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		data := structs.LoginData{}
 
-	query := "SELECT id, client_name, phone, address, problem_text, status, assigned_to, version, created_at, updated_at FROM requests WHERE 1=1"
-	args := []interface{}{}
-	if role == "master" {
-		query += " AND assigned_to = ?"
-		args = append(args, uid)
-	}
-	if status := r.URL.Query().Get("status"); status != "" {
-		query += " AND status = ?"
-		args = append(args, status)
-	}
-	rows, err := db.Query(query, args...)
-	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
-	}
-	defer rows.Close()
+		uid, role, name, err := getSession(r)
+		if err != nil {
+			errs.RenderError(w, tmpl, consts.DashboardHTML, &data, consts.InternalErrorMsg, err)
+			return
+		}
 
-	var reqs []Request
-	for rows.Next() {
-		var r Request
-		rows.Scan(&r.ID, &r.ClientName, &r.Phone, &r.Address, &r.ProblemText, &r.Status, &r.AssignedTo, &r.Version, &r.CreatedAt, &r.UpdatedAt)
-		reqs = append(reqs, r)
-	}
+		if uid == 0 {
+			http.Redirect(w, r, consts.HomePath, http.StatusSeeOther)
+			return
+		}
 
-	masters, _ := db.Query("SELECT id, name FROM users WHERE role = 'master'")
-	defer masters.Close()
-	var ms []User
-	for masters.Next() {
-		var u User
-		masters.Scan(&u.ID, &u.Name)
-		ms = append(ms, u)
-	}
+		query := consts.DashboardSelectQuery
+		args := []any{}
+		if role == consts.Master {
+			query += " AND assigned_to = ?"
+			args = append(args, uid)
+		}
 
-	data := map[string]interface{}{"User": name, "Role": role, "Requests": reqs, "Masters": ms}
-	tmpl.ExecuteTemplate(w, "dashboard.html", data)
+		if status := r.URL.Query().Get(consts.Status); status != "" {
+			query += " AND status = ?"
+			args = append(args, status)
+		}
+
+		reqs, masters, err := db.Dashboard(query, args)
+		if err != nil {
+			errs.RenderError(w, tmpl, consts.DashboardHTML, &data, consts.InternalErrorMsg, errors.WithStack(errors.New(consts.InternalErrorMsg)))
+			return
+		}
+
+		dashboardData := map[string]interface{}{consts.User: name, consts.Role: role, consts.Requests: reqs, consts.Masters: masters}
+		tmpl.ExecuteTemplate(w, consts.DashboardHTML, dashboardData)
+	}
 }
 
-func actionHandler(w http.ResponseWriter, r *http.Request) {
-	uid, role, _ := getSession(r)
-	id, _ := strconv.Atoi(r.FormValue("id"))
-	action := r.FormValue("action")
+func Action(db *database.DB, tmpl *template.Template) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		data := structs.LoginData{}
 
-	var res sql.Result
-	var err error
+		_, role, _, cookieErr := getSession(r)
+		if cookieErr != nil {
+			errs.RenderError(w, tmpl, consts.DashboardHTML, &data, consts.InternalErrorMsg, cookieErr)
+			return
+		}
 
-	switch action {
-	case "assign":
-		if role != "dispatcher" {
-			break
+		action := r.FormValue(consts.Action)
+		StID := r.FormValue(consts.ID)
+
+		if action == "" || StID == "" {
+			errs.RenderError(w, tmpl, consts.DashboardHTML, &data, consts.BadInputMsg, errors.WithStack(errors.New(consts.BadInputMsg)))
+			return
 		}
-		mid := r.FormValue("master_id")
-		res, err = db.Exec("UPDATE requests SET status = 'assigned', assigned_to = ? WHERE id = ? AND status = 'new'", mid, id)
-	case "cancel":
-		if role != "dispatcher" {
-			break
+
+		id, strconvErr := strconv.Atoi(StID)
+		if strconvErr != nil {
+			errs.RenderError(w, tmpl, consts.DashboardHTML, &data, consts.InternalErrorMsg, strconvErr)
+			return
 		}
-		res, err = db.Exec("UPDATE requests SET status = 'canceled' WHERE id = ? AND status IN ('new', 'assigned')", id)
-	case "start":
-		if role != "master" {
-			break
+
+		var err error
+		var progressErr error
+
+		switch action {
+		case consts.Assign:
+			if role != consts.Dispatcher {
+				break
+			}
+
+			if err = db.AssignedStatusUpdate(id); err != nil {
+				errs.RenderError(w, tmpl, consts.DashboardHTML, &data, consts.InternalErrorMsg, err)
+				return
+			}
+
+		case consts.Cancel:
+			if role != consts.Dispatcher {
+				break
+			}
+
+			if err = db.CanceledStatusUpdate(id); err != nil {
+				errs.RenderError(w, tmpl, consts.DashboardHTML, &data, consts.InternalErrorMsg, err)
+				return
+			}
+
+		case consts.Start:
+			if role != consts.Master {
+				break
+			}
+
+			if progressErr = db.InProgressStatusUpdate(id); progressErr != nil {
+				errs.RenderError(w, tmpl, consts.DashboardHTML, &data, consts.InternalErrorMsg, progressErr)
+				return
+			}
+
+		case consts.Finish:
+			if role != consts.Master {
+				break
+			}
+
+			if err = db.DoneStatusUpdate(id); err != nil {
+				errs.RenderError(w, tmpl, consts.DashboardHTML, &data, consts.InternalErrorMsg, err)
+				return
+			}
+
 		}
-		// Race Condition Safe: Optimistic Locking
-		res, err = db.Exec("UPDATE requests SET status = 'in_progress', version = version + 1 WHERE id = ? AND status = 'assigned' AND assigned_to = ?", id, uid)
-		if err == nil {
-			rows, _ := res.RowsAffected()
-			if rows == 0 {
-				err = sql.ErrNoRows
-			} // Force conflict
+
+		if progressErr != nil {
+			http.Redirect(w, r, consts.DashboardPath+"?error=conflict", http.StatusSeeOther)
+			return
 		}
-	case "finish":
-		if role != "master" {
-			break
-		}
-		res, err = db.Exec("UPDATE requests SET status = 'done' WHERE id = ? AND status = 'in_progress' AND assigned_to = ?", id, uid)
+
+		http.Redirect(w, r, consts.DashboardPath, http.StatusSeeOther)
 	}
-
-	if err != nil || (action == "start" && err == sql.ErrNoRows) {
-		http.Redirect(w, r, "/dashboard?error=conflict", http.StatusSeeOther)
-		return
-	}
-	http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
 }

@@ -8,12 +8,14 @@ docker-compose up --build
 Dispatcher: ID 1 (Header: X-User-ID: 1, X-User-Role: dispatcher)
 Master 1: ID 2 (Header: X-User-ID: 2, X-User-Role: master)
 Master 2: ID 3 (Header: X-User-ID: 3, X-User-Role: master)
+
 API
 POST /requests - Создать
 GET /requests?status=new - Список
 PATCH /requests/?id=1&action=assign&master_id=2 - Назначить
 PATCH /requests/?id=1&action=start - Взять в работу (Master)
 PATCH /requests/?id=1&action=finish - Завершить (Master)
+
 Проверка гонки (Race Condition)
 Запустите в двух терминалах одновременно:
 # Terminal 1
@@ -22,3 +24,16 @@ curl -X PATCH "http://localhost:8080/requests/?id=2&action=start" -H "X-User-ID:
 # Terminal 2
 curl -X PATCH "http://localhost:8080/requests/?id=2&action=start" -H "X-User-ID: 3" -H "X-User-Role: master"
 Один вернет 200 OK, второй 409 Conflict
+
+## Интерфейс
+1. Откройте http://localhost:8080
+2. Выберите пользователя (Диспетчер или Мастер).
+3. Диспетчер: создает заявки, назначает мастеров.
+4. Мастер: видит свои заявки, берет в работу, завершает.
+
+## Проверка гонки через UI
+1. Откройте два разных браузера (или инкогнито).
+2. Залогиньтесь как **Мастер 1** и **Мастер 2**.
+3. Диспетчер назначит заявку на **Мастера 1** (статус `assigned`).
+4. Оба мастера видят кнопку "В работу".
+5. Нажмите одновременно. Один успеет, второй получит ошибку "Заявка уже изменена".
