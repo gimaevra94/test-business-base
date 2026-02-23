@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"html/template"
-	"log"
 	"net/http"
 	"strconv"
 
@@ -66,24 +65,23 @@ func Login(db *database.DB, tmpl *template.Template) http.HandlerFunc {
 			name := r.FormValue(consts.Name)
 
 			if id == "" || role == "" || name == "" {
-				errs.RenderError(w, tmpl, consts.LoginHTML, &data, consts.BadInputMsg, errors.WithStack(errors.New(consts.BadInputMsg)))
+				errs.RenderError(w, tmpl, consts.LoginHTML, data, consts.BadInputMsg, errors.WithStack(errors.New(consts.BadInputMsg)))
 				return
 			}
 
-			http.SetCookie(w, &http.Cookie{Name: consts.ID, Value: id})
-			http.SetCookie(w, &http.Cookie{Name: consts.Role, Value: role})
-			http.SetCookie(w, &http.Cookie{Name: consts.Name, Value: name})
+			http.SetCookie(w, &http.Cookie{Name: consts.ID, Value: id, Path: "/"})
+			http.SetCookie(w, &http.Cookie{Name: consts.Role, Value: role, Path: "/"})
+			http.SetCookie(w, &http.Cookie{Name: consts.Name, Value: name, Path: "/"})
 			http.Redirect(w, r, consts.DashboardPath, http.StatusSeeOther)
 			return
 
 		case http.MethodGet:
-			log.Print("get")
 			users, err := db.GetUsers()
 			if err != nil {
-				errs.RenderError(w, tmpl, consts.LoginHTML, &data, consts.InternalErrorMsg, err)
+				errs.RenderError(w, tmpl, consts.LoginHTML, data, consts.InternalErrorMsg, err)
 				return
 			}
-			log.Print(users)
+
 			data.Users = users
 			if err := tmpl.ExecuteTemplate(w, consts.LoginHTML, data); err != nil {
 				logrus.Error(err)
@@ -92,7 +90,7 @@ func Login(db *database.DB, tmpl *template.Template) http.HandlerFunc {
 			return
 
 		default:
-			errs.RenderError(w, tmpl, consts.DashboardHTML, &data, consts.NotAllowedMsg, errors.WithStack(errors.New(consts.NotAllowedMsg)))
+			errs.RenderError(w, tmpl, consts.DashboardHTML, data, consts.NotAllowedMsg, errors.WithStack(errors.New(consts.NotAllowedMsg)))
 			return
 		}
 	}
@@ -101,13 +99,11 @@ func Login(db *database.DB, tmpl *template.Template) http.HandlerFunc {
 func GetLogin(db *database.DB, tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := structs.LoginData{}
-		log.Print("get")
 		users, err := db.GetUsers()
 		if err != nil {
-			errs.RenderError(w, tmpl, consts.LoginHTML, &data, consts.InternalErrorMsg, err)
+			errs.RenderError(w, tmpl, consts.LoginHTML, data, consts.InternalErrorMsg, err)
 			return
 		}
-		log.Print(users)
 		data.Users = users
 		if err := tmpl.ExecuteTemplate(w, consts.LoginHTML, data); err != nil {
 			logrus.Error(err)
@@ -134,7 +130,7 @@ func Create(db *database.DB, tmpl *template.Template) http.HandlerFunc {
 			problemText := r.FormValue(consts.ProblemText)
 
 			if clientName == "" || phone == "" || address == "" || problemText == "" {
-				errs.RenderError(w, tmpl, consts.CreateHTML, &data, consts.BadInputMsg, errors.WithStack(errors.New(consts.BadInputMsg)))
+				errs.RenderError(w, tmpl, consts.CreateHTML, data, consts.BadInputMsg, errors.WithStack(errors.New(consts.BadInputMsg)))
 				return
 			}
 
@@ -153,12 +149,12 @@ func Create(db *database.DB, tmpl *template.Template) http.HandlerFunc {
 					logrus.Error(err)
 					return
 				}
-				errs.RenderError(w, tmpl, consts.CreateHTML, &data, consts.InternalErrorMsg, err)
+				errs.RenderError(w, tmpl, consts.CreateHTML, data, consts.InternalErrorMsg, err)
 				return
 			}
 
 			if !insertIsOk {
-				errs.RenderError(w, tmpl, consts.CreateHTML, &data, consts.InternalErrorMsg, errors.WithStack(errors.New(consts.InternalErrorMsg)))
+				errs.RenderError(w, tmpl, consts.CreateHTML, data, consts.InternalErrorMsg, errors.WithStack(errors.New(consts.InternalErrorMsg)))
 				return
 			}
 
@@ -177,13 +173,13 @@ func Dashboard(db *database.DB, tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := structs.LoginData{}
 
-		uid, role, name, err := getSession(r)
+		id, role, name, err := getSession(r)
 		if err != nil {
-			errs.RenderError(w, tmpl, consts.DashboardHTML, &data, consts.InternalErrorMsg, err)
+			errs.RenderError(w, tmpl, consts.DashboardHTML, data, consts.InternalErrorMsg, err)
 			return
 		}
 
-		if uid == 0 {
+		if id == 0 {
 			http.Redirect(w, r, consts.HomePath, http.StatusSeeOther)
 			return
 		}
@@ -192,17 +188,18 @@ func Dashboard(db *database.DB, tmpl *template.Template) http.HandlerFunc {
 		args := []any{}
 		if role == consts.Master {
 			query += " AND assigned_to = ?"
-			args = append(args, uid)
+			args = append(args, id)
 		}
 
 		if status := r.URL.Query().Get(consts.Status); status != "" {
 			query += " AND status = ?"
 			args = append(args, status)
 		}
-
+		
 		reqs, masters, err := db.Dashboard(query, args)
 		if err != nil {
-			errs.RenderError(w, tmpl, consts.DashboardHTML, &data, consts.InternalErrorMsg, errors.WithStack(errors.New(consts.InternalErrorMsg)))
+			
+			errs.RenderError(w, tmpl, consts.DashboardHTML, data, consts.InternalErrorMsg, errors.WithStack(errors.New(consts.InternalErrorMsg)))
 			return
 		}
 
@@ -217,7 +214,7 @@ func Action(db *database.DB, tmpl *template.Template) http.HandlerFunc {
 
 		_, role, _, cookieErr := getSession(r)
 		if cookieErr != nil {
-			errs.RenderError(w, tmpl, consts.DashboardHTML, &data, consts.InternalErrorMsg, cookieErr)
+			errs.RenderError(w, tmpl, consts.DashboardHTML, data, consts.InternalErrorMsg, cookieErr)
 			return
 		}
 
@@ -225,13 +222,13 @@ func Action(db *database.DB, tmpl *template.Template) http.HandlerFunc {
 		StID := r.FormValue(consts.ID)
 
 		if action == "" || StID == "" {
-			errs.RenderError(w, tmpl, consts.DashboardHTML, &data, consts.BadInputMsg, errors.WithStack(errors.New(consts.BadInputMsg)))
+			errs.RenderError(w, tmpl, consts.DashboardHTML, data, consts.BadInputMsg, errors.WithStack(errors.New(consts.BadInputMsg)))
 			return
 		}
 
 		id, strconvErr := strconv.Atoi(StID)
 		if strconvErr != nil {
-			errs.RenderError(w, tmpl, consts.DashboardHTML, &data, consts.InternalErrorMsg, strconvErr)
+			errs.RenderError(w, tmpl, consts.DashboardHTML, data, consts.InternalErrorMsg, strconvErr)
 			return
 		}
 
@@ -245,7 +242,7 @@ func Action(db *database.DB, tmpl *template.Template) http.HandlerFunc {
 			}
 
 			if err = db.AssignedStatusUpdate(id); err != nil {
-				errs.RenderError(w, tmpl, consts.DashboardHTML, &data, consts.InternalErrorMsg, err)
+				errs.RenderError(w, tmpl, consts.DashboardHTML, data, consts.InternalErrorMsg, err)
 				return
 			}
 
@@ -255,7 +252,7 @@ func Action(db *database.DB, tmpl *template.Template) http.HandlerFunc {
 			}
 
 			if err = db.CanceledStatusUpdate(id); err != nil {
-				errs.RenderError(w, tmpl, consts.DashboardHTML, &data, consts.InternalErrorMsg, err)
+				errs.RenderError(w, tmpl, consts.DashboardHTML, data, consts.InternalErrorMsg, err)
 				return
 			}
 
@@ -265,7 +262,7 @@ func Action(db *database.DB, tmpl *template.Template) http.HandlerFunc {
 			}
 
 			if progressErr = db.InProgressStatusUpdate(id); progressErr != nil {
-				errs.RenderError(w, tmpl, consts.DashboardHTML, &data, consts.InternalErrorMsg, progressErr)
+				errs.RenderError(w, tmpl, consts.DashboardHTML, data, consts.InternalErrorMsg, progressErr)
 				return
 			}
 
@@ -275,7 +272,7 @@ func Action(db *database.DB, tmpl *template.Template) http.HandlerFunc {
 			}
 
 			if err = db.DoneStatusUpdate(id); err != nil {
-				errs.RenderError(w, tmpl, consts.DashboardHTML, &data, consts.InternalErrorMsg, err)
+				errs.RenderError(w, tmpl, consts.DashboardHTML, data, consts.InternalErrorMsg, err)
 				return
 			}
 

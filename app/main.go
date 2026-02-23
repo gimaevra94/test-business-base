@@ -43,8 +43,8 @@ func initDB() (*database.DB, error) {
 
 func initRouter(db *database.DB, tmpl *template.Template) *chi.Mux {
 	r := chi.NewRouter()
-	r.Get(consts.HomePath, handlers.Home(tmpl))
-	r.Get(consts.GetLoginPath, handlers.GetLogin(db, tmpl))
+	//r.Get(consts.HomePath, handlers.Home(tmpl))
+	r.Get(consts.HomePath, handlers.GetLogin(db, tmpl))
 	r.Post(consts.LoginPath, handlers.Login(db, tmpl))
 	r.Get(consts.LogoutPath, handlers.Logout(db, tmpl))
 	r.Get(consts.CreatePath, handlers.Create(db, tmpl))

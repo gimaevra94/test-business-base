@@ -5,7 +5,7 @@
 <div style="margin-bottom:20px;">
     {{if eq .Role "dispatcher"}}<a href="/create" class="btn">Новая заявка</a>{{end}}
     <a href="/logout" class="btn btn-cancel">Выход</a>
-    <form method="GET" style="display:inline;"><select name="status"><option value="">Все статусы</option><option value="new">new</option><option value="assigned">assigned</option><option value="in_progress">in_progress</option><option value="done">done</option></select><button type="submit">Фильтр</button></form>
+    <form method="GET" action="/dashboard" style="display:inline;"><select name="status"><option value="">Все статусы</option><option value="new">new</option><option value="assigned">assigned</option><option value="in_progress">in_progress</option><option value="done">done</option></select><button type="submit">Фильтр</button></form>
 </div>
 <table>
     <tr><th>ID</th><th>Клиент</th><th>Проблема</th><th>Статус</th><th>Мастер</th><th>Действие</th></tr>

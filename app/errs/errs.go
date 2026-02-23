@@ -9,7 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func RenderError(w http.ResponseWriter, tmpl *template.Template, templateName string, data *structs.LoginData, msg string, err error) {
+func RenderError(w http.ResponseWriter, tmpl *template.Template, templateName string, data structs.LoginData, msg string, err error) {
 	data.Msg = msg
 	log.Printf("%+v", err)
 	if err := tmpl.ExecuteTemplate(w, templateName, data); err != nil {

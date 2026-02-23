@@ -80,21 +80,8 @@ func (db *DB) Create(req *structs.Request) (error, bool) {
 }
 
 func (db *DB) Dashboard(query string, args []any) ([]structs.Request, []structs.User, error) {
-	tx, err := db.Begin()
+	rows, err := db.Query(query, args...)
 	if err != nil {
-		return []structs.Request{}, []structs.User{}, errors.WithStack(err)
-	}
-
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-			return
-		}
-	}()
-
-	rows, err := tx.Query(query, args...)
-	if err != nil {
-		tx.Rollback()
 		return []structs.Request{}, []structs.User{}, errors.WithStack(err)
 	}
 	defer rows.Close()
@@ -103,15 +90,13 @@ func (db *DB) Dashboard(query string, args []any) ([]structs.Request, []structs.
 	for rows.Next() {
 		var r structs.Request
 		if err := rows.Scan(&r.ID, &r.ClientName, &r.Phone, &r.Address, &r.ProblemText, &r.Status, &r.AssignedTo, &r.Version, &r.CreatedAt, &r.UpdatedAt); err != nil {
-			tx.Rollback()
 			return []structs.Request{}, []structs.User{}, errors.WithStack(err)
 		}
 		reqs = append(reqs, r)
 	}
 
-	rows, err = tx.Query(consts.MastersSelectQuery)
+	rows, err = db.Query(consts.MastersSelectQuery)
 	if err != nil {
-		tx.Rollback()
 		return []structs.Request{}, []structs.User{}, errors.WithStack(err)
 	}
 	defer rows.Close()
@@ -123,10 +108,6 @@ func (db *DB) Dashboard(query string, args []any) ([]structs.Request, []structs.
 			return []structs.Request{}, []structs.User{}, errors.WithStack(err)
 		}
 		masters = append(masters, master)
-	}
-
-	if err = tx.Commit(); err != nil {
-		return []structs.Request{}, []structs.User{}, errors.WithStack(err)
 	}
 
 	return reqs, masters, nil
