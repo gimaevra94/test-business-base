@@ -10,3 +10,5 @@ WORKDIR /app
 RUN apk --no-cache add ca-certificates
 COPY --from=build /app/bin/service .
 CMD ["./service"]
+
+docker-compose run --rm migrate -path /migrations -database "mysql://root:root@tcp(db:3306)/repair_service" down 1

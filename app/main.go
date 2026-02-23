@@ -21,8 +21,7 @@ func main() {
 	if err != nil {
 		logrus.Fatal(err)
 	}
-	defer db.DB.Close()
-
+	
 	tmpl := template.Must(template.ParseFS(templatesFS, "templates/*.html"))
 
 	r := initRouter(db, tmpl)

@@ -184,26 +184,35 @@ func Dashboard(db *database.DB, tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
-		query := consts.DashboardSelectQuery
-		args := []any{}
+		gorm := db.GORM()
+		query := gorm.Model(&structs.Request{})
 		if role == consts.Master {
-			query += " AND assigned_to = ?"
-			args = append(args, id)
+			query = query.Where("assigned_to = ?", id)
 		}
 
 		if status := r.URL.Query().Get(consts.Status); status != "" {
-			query += " AND status = ?"
-			args = append(args, status)
+			query = query.Where("status = ?", status)
 		}
-		
-		reqs, masters, err := db.Dashboard(query, args)
-		if err != nil {
-			
-			errs.RenderError(w, tmpl, consts.DashboardHTML, data, consts.InternalErrorMsg, errors.WithStack(errors.New(consts.InternalErrorMsg)))
+
+		var reqs []structs.Request
+		if err := query.Find(&reqs).Error; err != nil {
+			errs.RenderError(w, tmpl, consts.DashboardHTML, data, consts.InternalErrorMsg, errors.WithStack(err))
 			return
 		}
 
-		dashboardData := map[string]interface{}{consts.User: name, consts.Role: role, consts.Requests: reqs, consts.Masters: masters}
+		var masters []structs.User
+		if err := gorm.Model(&structs.User{}).Where("role = ?", consts.Master).Find(&masters).Error; err != nil {
+			errs.RenderError(w, tmpl, consts.DashboardHTML, data, consts.InternalErrorMsg, errors.WithStack(err))
+			return
+		}
+
+		dashboardData := map[string]any{
+			"User":     name,
+			"Role":     role,
+			"Requests": reqs,
+			"Masters":  masters,
+		}
+
 		tmpl.ExecuteTemplate(w, consts.DashboardHTML, dashboardData)
 	}
 }

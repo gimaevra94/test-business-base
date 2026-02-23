@@ -5,28 +5,40 @@ import (
 
 	"github.com/gimaevra94/test-business-base/consts"
 	"github.com/gimaevra94/test-business-base/structs"
-	_ "github.com/go-sql-driver/mysql"
 	"github.com/pkg/errors"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
 )
 
 type DB struct {
-	*sql.DB
+	sql  *sql.DB
+	gorm *gorm.DB
+}
+
+func (db *DB) GORM() *gorm.DB {
+	return db.gorm
 }
 
 func DBConn(cfg string) (*DB, error) {
-	db, err := sql.Open("mysql", cfg)
-	if err != nil {
-		return nil, errors.WithStack(err)
+	sql, sqlErr := sql.Open("mysql", cfg)
+	gorm, gormErr := gorm.Open(mysql.Open(cfg), &gorm.Config{})
+
+	if sqlErr != nil {
+		return nil, errors.WithStack(sqlErr)
 	}
 
-	if err := db.Ping(); err != nil {
+	if gormErr != nil {
+		return nil, errors.WithStack(gormErr)
+	}
+
+	if err := sql.Ping(); err != nil {
 		return nil, errors.WithStack(err)
 	}
-	return &DB{db}, nil
+	return &DB{sql, gorm}, nil
 }
 
 func (db *DB) GetUsers() ([]structs.User, error) {
-	rows, err := db.Query(consts.UsersSelectQuery)
+	rows, err := db.sql.Query(consts.UsersSelectQuery)
 	if err != nil {
 		return []structs.User{}, errors.WithStack(err)
 	}
@@ -45,7 +57,7 @@ func (db *DB) GetUsers() ([]structs.User, error) {
 }
 
 func (db *DB) Create(req *structs.Request) (error, bool) {
-	tx, err := db.Begin()
+	tx, err := db.sql.Begin()
 	if err != nil {
 		return errors.WithStack(err), false
 	}
@@ -79,42 +91,8 @@ func (db *DB) Create(req *structs.Request) (error, bool) {
 	return nil, true
 }
 
-func (db *DB) Dashboard(query string, args []any) ([]structs.Request, []structs.User, error) {
-	rows, err := db.Query(query, args...)
-	if err != nil {
-		return []structs.Request{}, []structs.User{}, errors.WithStack(err)
-	}
-	defer rows.Close()
-
-	var reqs []structs.Request
-	for rows.Next() {
-		var r structs.Request
-		if err := rows.Scan(&r.ID, &r.ClientName, &r.Phone, &r.Address, &r.ProblemText, &r.Status, &r.AssignedTo, &r.Version, &r.CreatedAt, &r.UpdatedAt); err != nil {
-			return []structs.Request{}, []structs.User{}, errors.WithStack(err)
-		}
-		reqs = append(reqs, r)
-	}
-
-	rows, err = db.Query(consts.MastersSelectQuery)
-	if err != nil {
-		return []structs.Request{}, []structs.User{}, errors.WithStack(err)
-	}
-	defer rows.Close()
-
-	var masters []structs.User
-	for rows.Next() {
-		var master structs.User
-		if err := rows.Scan(&master.ID, &master.Name); err != nil {
-			return []structs.Request{}, []structs.User{}, errors.WithStack(err)
-		}
-		masters = append(masters, master)
-	}
-
-	return reqs, masters, nil
-}
-
 func (db *DB) AssignedStatusUpdate(id int) error {
-	_, err := db.Exec(consts.AssignedStatusUpdateQuery, id, id)
+	_, err := db.sql.Exec(consts.AssignedStatusUpdateQuery, id, id)
 	if err != nil {
 		return errors.WithStack(err)
 	}
@@ -122,7 +100,7 @@ func (db *DB) AssignedStatusUpdate(id int) error {
 }
 
 func (db *DB) CanceledStatusUpdate(rid int) error {
-	_, err := db.Exec(consts.CanceledStatusUpdateQuery, rid)
+	_, err := db.sql.Exec(consts.CanceledStatusUpdateQuery, rid)
 	if err != nil {
 		return errors.WithStack(err)
 	}
@@ -130,7 +108,7 @@ func (db *DB) CanceledStatusUpdate(rid int) error {
 }
 
 func (db *DB) InProgressStatusUpdate(rid int) error {
-	res, err := db.Exec(consts.InProgressStatusUpdateQuery, rid)
+	res, err := db.sql.Exec(consts.InProgressStatusUpdateQuery, rid)
 	if err != nil {
 		return errors.WithStack(err)
 	}
@@ -149,7 +127,7 @@ func (db *DB) InProgressStatusUpdate(rid int) error {
 }
 
 func (db *DB) DoneStatusUpdate(rid int) error {
-	_, err := db.Exec(consts.DoneStatusUpdateQuery, rid)
+	_, err := db.sql.Exec(consts.DoneStatusUpdateQuery, rid)
 	if err != nil {
 		return errors.WithStack(err)
 	}
