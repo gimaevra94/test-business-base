@@ -39,7 +39,7 @@ func getSession(r *http.Request) (int, string, string, error) {
 	return id, role, name, nil
 }
 
-func Home(tmpl *template.Template) http.HandlerFunc {
+/*func Home(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, _, _, _ := getSession(r)
 		if id > 0 {
@@ -52,9 +52,9 @@ func Home(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 	}
-}
+}*/
 
-func Login(db *database.DB, tmpl *template.Template) http.HandlerFunc {
+func LoginPost(db *database.DB, tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := structs.LoginData{}
 
@@ -96,7 +96,7 @@ func Login(db *database.DB, tmpl *template.Template) http.HandlerFunc {
 	}
 }
 
-func GetLogin(db *database.DB, tmpl *template.Template) http.HandlerFunc {
+func LoginGet(db *database.DB, tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := structs.LoginData{}
 		users, err := db.GetUsers()
@@ -141,7 +141,7 @@ func Create(db *database.DB, tmpl *template.Template) http.HandlerFunc {
 				ProblemText: problemText,
 			}
 
-			err, insertIsOk := db.Create(&req)
+			err := db.Create(&req)
 			if err != nil {
 				data.Msg = consts.InternalErrorMsg
 				logrus.Error(err)
@@ -150,11 +150,6 @@ func Create(db *database.DB, tmpl *template.Template) http.HandlerFunc {
 					return
 				}
 				errs.RenderError(w, tmpl, consts.CreateHTML, data, consts.InternalErrorMsg, err)
-				return
-			}
-
-			if !insertIsOk {
-				errs.RenderError(w, tmpl, consts.CreateHTML, data, consts.InternalErrorMsg, errors.WithStack(errors.New(consts.InternalErrorMsg)))
 				return
 			}
 
@@ -228,7 +223,8 @@ func Action(db *database.DB, tmpl *template.Template) http.HandlerFunc {
 		}
 
 		action := r.FormValue(consts.Action)
-		StID := r.FormValue(consts.ID)
+		StUID := r.FormValue(consts.ID)
+		StUID := r.FormValue(consts.ID)
 
 		if action == "" || StID == "" {
 			errs.RenderError(w, tmpl, consts.DashboardHTML, data, consts.BadInputMsg, errors.WithStack(errors.New(consts.BadInputMsg)))

@@ -56,39 +56,12 @@ func (db *DB) GetUsers() ([]structs.User, error) {
 	return users, nil
 }
 
-func (db *DB) Create(req *structs.Request) (error, bool) {
-	tx, err := db.sql.Begin()
+func (db *DB) Create(req *structs.Request) error {
+	_, err := db.sql.Exec(consts.RequestInsertQuery, req.ClientName, req.Phone, req.Address, req.ProblemText)
 	if err != nil {
-		return errors.WithStack(err), false
+		return errors.WithStack(err)
 	}
-
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-			return
-		}
-	}()
-
-	var resultReq structs.Request
-	row := tx.QueryRow(consts.RequestsSelectQuery)
-	err = row.Scan(&resultReq.ClientName, &resultReq.Phone, &resultReq.Address, &resultReq.ProblemText)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			if _, err := tx.Exec(consts.RequestInsertQuery, req.ClientName, req.Phone, req.Address, req.ProblemText); err != nil {
-				tx.Rollback()
-				return errors.WithStack(err), false
-			}
-
-			if err = tx.Commit(); err != nil {
-				return errors.WithStack(err), false
-			}
-
-		} else {
-			tx.Rollback()
-			return errors.WithStack(err), false
-		}
-	}
-	return nil, true
+	return nil
 }
 
 func (db *DB) AssignedStatusUpdate(id int) error {
