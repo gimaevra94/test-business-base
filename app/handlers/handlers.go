@@ -216,24 +216,23 @@ func Action(db *database.DB, tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := structs.LoginData{}
 
-		_, role, _, cookieErr := getSession(r)
+		cookieMid, role, _, cookieErr := getSession(r)
 		if cookieErr != nil {
 			errs.RenderError(w, tmpl, consts.DashboardHTML, data, consts.InternalErrorMsg, cookieErr)
 			return
 		}
 
 		action := r.FormValue(consts.Action)
-		StUID := r.FormValue(consts.ID)
-		StUID := r.FormValue(consts.ID)
+		StRID := r.FormValue(consts.ID)
 
-		if action == "" || StID == "" {
+		if action == "" || StRID == "" {
 			errs.RenderError(w, tmpl, consts.DashboardHTML, data, consts.BadInputMsg, errors.WithStack(errors.New(consts.BadInputMsg)))
 			return
 		}
 
-		id, strconvErr := strconv.Atoi(StID)
-		if strconvErr != nil {
-			errs.RenderError(w, tmpl, consts.DashboardHTML, data, consts.InternalErrorMsg, strconvErr)
+		rid, err1 := strconv.Atoi(StRID)
+		if err1 != nil {
+			errs.RenderError(w, tmpl, consts.DashboardHTML, data, consts.InternalErrorMsg, err1)
 			return
 		}
 
@@ -246,7 +245,19 @@ func Action(db *database.DB, tmpl *template.Template) http.HandlerFunc {
 				break
 			}
 
-			if err = db.AssignedStatusUpdate(id); err != nil {
+			StMID := r.FormValue("master_id")
+			if StMID == "" {
+				errs.RenderError(w, tmpl, consts.DashboardHTML, data, consts.BadInputMsg, errors.WithStack(errors.New(consts.BadInputMsg)))
+				return
+			}
+
+			mid, err := strconv.Atoi(StMID)
+			if err != nil {
+				errs.RenderError(w, tmpl, consts.DashboardHTML, data, consts.InternalErrorMsg, err)
+				return
+			}
+
+			if err = db.AssignedStatusUpdate(mid, rid); err != nil {
 				errs.RenderError(w, tmpl, consts.DashboardHTML, data, consts.InternalErrorMsg, err)
 				return
 			}
@@ -256,7 +267,7 @@ func Action(db *database.DB, tmpl *template.Template) http.HandlerFunc {
 				break
 			}
 
-			if err = db.CanceledStatusUpdate(id); err != nil {
+			if err = db.CanceledStatusUpdate(rid); err != nil {
 				errs.RenderError(w, tmpl, consts.DashboardHTML, data, consts.InternalErrorMsg, err)
 				return
 			}
@@ -266,7 +277,7 @@ func Action(db *database.DB, tmpl *template.Template) http.HandlerFunc {
 				break
 			}
 
-			if progressErr = db.InProgressStatusUpdate(id); progressErr != nil {
+			if progressErr = db.InProgressStatusUpdate(rid, cookieMid); progressErr != nil {
 				errs.RenderError(w, tmpl, consts.DashboardHTML, data, consts.InternalErrorMsg, progressErr)
 				return
 			}
@@ -275,8 +286,8 @@ func Action(db *database.DB, tmpl *template.Template) http.HandlerFunc {
 			if role != consts.Master {
 				break
 			}
-
-			if err = db.DoneStatusUpdate(id); err != nil {
+			
+			if err = db.DoneStatusUpdate(rid, cookieMid); err != nil {
 				errs.RenderError(w, tmpl, consts.DashboardHTML, data, consts.InternalErrorMsg, err)
 				return
 			}

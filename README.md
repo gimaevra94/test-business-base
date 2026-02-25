@@ -1,39 +1,133 @@
-# Repair Service
+# Система управления сервисными заявками
 
-## Запуск
+Веб-приложение для управления заявками на ремонт с разграничением прав доступа по ролям.
+
+## 📋 Возможности
+
+- **Роли пользователей**: Диспетчер и Мастер
+- **Управление заявками**: Создание, назначение, отслеживание статуса
+- **Жизненный цикл заявки**: new → assigned → in_progress → done/canceled
+- **Панель управления**: Фильтрация заявок по статусу
+- **Оптимистичная блокировка**: Контроль версий для предотвращения гонок данных
+
+## 🏗️ Архитектура проекта
+
+```
+├── consts/          # Константы (SQL-запросы, пути, сообщения)
+├── database/        # Подключение к БД и запросы
+├── handlers/        # Обработчики HTTP-запросов
+├── structs/         # Структуры данных
+├── templates/       # HTML-шаблоны
+├── migrations/      # Миграции базы данных
+├── seeds/           # Начальные данные
+└── docker/          # Docker-конфигурация
+```
+
+## 🚀 Быстрый старт
+
+### Требования
+- Docker и Docker Compose
+- Go 1.25+ (для локальной разработки)
+
+### Запуск через Docker Compose
+
 ```bash
+cd docker
 docker-compose up --build
+```
 
-Пользователи (из seed)
-Dispatcher: ID 1 (Header: X-User-ID: 1, X-User-Role: dispatcher)
-Master 1: ID 2 (Header: X-User-ID: 2, X-User-Role: master)
-Master 2: ID 3 (Header: X-User-ID: 3, X-User-Role: master)
+Приложение будет доступно по адресам:
+- **Веб-интерфейс**: http://localhost:8080
+- **MySQL**: localhost:3306
 
-API
-POST /requests - Создать
-GET /requests?status=new - Список
-PATCH /requests/?id=1&action=assign&master_id=2 - Назначить
-PATCH /requests/?id=1&action=start - Взять в работу (Master)
-PATCH /requests/?id=1&action=finish - Завершить (Master)
+### Локальная разработка
 
-Проверка гонки (Race Condition)
-Запустите в двух терминалах одновременно:
-# Terminal 1
-curl -X PATCH "http://localhost:8080/requests/?id=2&action=start" -H "X-User-ID: 2" -H "X-User-Role: master"
+1. **Запуск базы данных**:
+```bash
+cd docker
+docker-compose up db
+```
 
-# Terminal 2
-curl -X PATCH "http://localhost:8080/requests/?id=2&action=start" -H "X-User-ID: 3" -H "X-User-Role: master"
-Один вернет 200 OK, второй 409 Conflict
+2. **Применение миграций**:
+```bash
+docker-compose run --rm migrate -path ../migrations -database "mysql://root:root@tcp(localhost:3306)/repair_service" up
+```
 
-## Интерфейс
-1. Откройте http://localhost:8080
-2. Выберите пользователя (Диспетчер или Мастер).
-3. Диспетчер: создает заявки, назначает мастеров.
-4. Мастер: видит свои заявки, берет в работу, завершает.
+3. **Заполнение тестовыми данными**:
+```bash
+docker-compose run --rm seed
+```
 
-## Проверка гонки через UI
-1. Откройте два разных браузера (или инкогнито).
-2. Залогиньтесь как **Мастер 1** и **Мастер 2**.
-3. Диспетчер назначит заявку на **Мастера 1** (статус `assigned`).
-4. Оба мастера видят кнопку "В работу".
-5. Нажмите одновременно. Один успеет, второй получит ошибку "Заявка уже изменена".
+4. **Запуск приложения**:
+```bash
+cd app
+go run main.go
+```
+
+## 👥 Роли пользователей
+
+### Диспетчер
+- Создание новых заявок
+- Назначение мастеров на заявки (статус: new)
+- Отмена заявок (статус: new, assigned)
+- Просмотр всех заявок
+
+### Мастер
+- Просмотр назначенных заявок
+- Начало работы (статус: assigned → in_progress)
+- Завершение работы (статус: in_progress → done)
+
+## 🗄️ Схема базы данных
+
+**Таблица users**
+- id, name, role (dispatcher/master)
+
+**Таблица requests**
+- id, client_name, phone, address, problem_text
+- status (new/assigned/in_progress/done/canceled)
+- assigned_to (внешний ключ → users.id)
+- version (оптимистичная блокировка)
+- created_at, updated_at
+
+## 🔧 Конфигурация
+
+Подключение к базе данных:
+```
+Host: localhost:3306
+User: root
+Password: root
+Database: repair_service
+```
+
+## 📦 Технологический стек
+
+- **Backend**: Go 1.25, маршрутизатор chi
+- **База данных**: MySQL 8.0
+- **Работа с БД**: GORM + raw SQL
+- **Шаблоны**: HTML templates
+- **Контейнеризация**: Docker, Docker Compose
+
+## 🔐 Аутентификация
+
+Простая аутентификация на основе cookie с выбором пользователя при входе.
+
+## 📝 Эндпоинты API
+
+| Метод | Путь | Описание |
+|-------|------|----------|
+| GET | `/` | Страница входа |
+| POST | `/login` | Аутентификация |
+| GET | `/logout` | Выход из системы |
+| GET/POST | `/create` | Создание заявки |
+| GET | `/dashboard` | Просмотр заявок |
+| POST | `/action` | Выполнение действий (assign/cancel/start/finish) |
+
+## 🧪 Тестовые пользователи
+
+После заполнения seed-данными доступны:
+- **Диспетчеры**: Dispatcher 2, Dispatcher 3
+- **Мастера**: Master 3, Master 4, Master 5, Master 6
+
+## 📄 Лицензия
+
+MIT

@@ -64,8 +64,8 @@ func (db *DB) Create(req *structs.Request) error {
 	return nil
 }
 
-func (db *DB) AssignedStatusUpdate(id int) error {
-	_, err := db.sql.Exec(consts.AssignedStatusUpdateQuery, id, id)
+func (db *DB) AssignedStatusUpdate(mid, rid int) error {
+	_, err := db.sql.Exec(consts.AssignedStatusUpdateQuery, mid, rid)
 	if err != nil {
 		return errors.WithStack(err)
 	}
@@ -80,8 +80,8 @@ func (db *DB) CanceledStatusUpdate(rid int) error {
 	return nil
 }
 
-func (db *DB) InProgressStatusUpdate(rid int) error {
-	res, err := db.sql.Exec(consts.InProgressStatusUpdateQuery, rid)
+func (db *DB) InProgressStatusUpdate(rid, mid int) error {
+	res, err := db.sql.Exec(consts.InProgressStatusUpdateQuery, rid, mid)
 	if err != nil {
 		return errors.WithStack(err)
 	}
@@ -99,8 +99,8 @@ func (db *DB) InProgressStatusUpdate(rid int) error {
 	return nil
 }
 
-func (db *DB) DoneStatusUpdate(rid int) error {
-	_, err := db.sql.Exec(consts.DoneStatusUpdateQuery, rid)
+func (db *DB) DoneStatusUpdate(rid, mid int) error {
+	_, err := db.sql.Exec(consts.DoneStatusUpdateQuery, rid, mid)
 	if err != nil {
 		return errors.WithStack(err)
 	}
