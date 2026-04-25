@@ -34,7 +34,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
     ports:
-      - "8080:8080"
+      - "8081:8081"
     environment:
       CONNECTION_CFG: root:root@tcp(db:3306)/repair_service
     depends_on:
